@@ -148,14 +148,14 @@ flowchart LR
 
 | Repository | Role | Highlights |
 |---|---|---|
-| 🧊 **[`omnix`](https://github.com/omnix-os/omnix)** | **Core flake.** The entry point, NixOS modules, and system templates | `nixosModules.default`, `templates.*`, hardware presets |
-| 📂 **[`omnix-fhs`](https://github.com/omnix-os/omnix-fhs)** | **The FHS layer.** Symlink-farm generator, loader shim, `/etc` overlay reconciler | Activation hooks, `ld.so.cache` builder, FHS self-check |
-| 🟣 **[`omnix-omarchy`](https://github.com/omnix-os/omnix-omarchy)** | **Omarchy profile.** Runs upstream Omarchy on Omnix | Hyprland session, pacman/yay shims, theme sync |
-| 🐧 **[`omnix-distros`](https://github.com/omnix-os/omnix-distros)** | **Other distro profiles.** Arch, Debian-style, and minimal userlands | Profile schema, community-contributed profiles |
-| 💿 **[`omnix-iso`](https://github.com/omnix-os/omnix-iso)** | **Installer media.** Live ISO with a guided installer | Graphical and TUI installers, disko layouts |
-| 🧪 **[`omnix-tests`](https://github.com/omnix-os/omnix-tests)** | **Integration test suite.** VM tests, conformance, and screenshot tests | `nixosTest` matrix, FHS 3.0 checker, Hyprland visual tests |
-| 📚 **[`omnix-docs`](https://github.com/omnix-os/omnix-docs)** | **Docs and website** | Guides, architecture notes, profile authoring |
-| ⚙️ **[`.github`](https://github.com/omnix-os/.github)** | Org profile, community health files, issue templates | You are here 👋 |
+| 🧊 **[`omnix`](https://github.com/Omnix-Linux/omnix)** | **Core flake.** The entry point, NixOS modules, and system templates | `nixosModules.default`, `templates.*`, hardware presets |
+| 📂 **[`omnix-fhs`](https://github.com/Omnix-Linux/omnix-fhs)** | **The FHS layer.** Symlink-farm generator, loader shim, `/etc` overlay reconciler | Activation hooks, `ld.so.cache` builder, FHS self-check |
+| 🟣 **[`omnix-omarchy`](https://github.com/Omnix-Linux/omnix-omarchy)** | **Omarchy profile.** Runs upstream Omarchy on Omnix | Hyprland session, pacman/yay shims, theme sync |
+| 🐧 **[`omnix-distros`](https://github.com/Omnix-Linux/omnix-distros)** | **Other distro profiles.** Arch, Debian-style, and minimal userlands | Profile schema, community-contributed profiles |
+| 💿 **[`omnix-iso`](https://github.com/Omnix-Linux/omnix-iso)** | **Installer media.** Live ISO with a guided installer | Graphical and TUI installers, disko layouts |
+| 🧪 **[`omnix-tests`](https://github.com/Omnix-Linux/omnix-tests)** | **Integration test suite.** VM tests, conformance, and screenshot tests | `nixosTest` matrix, FHS 3.0 checker, Hyprland visual tests |
+| 📚 **[`omnix-docs`](https://github.com/Omnix-Linux/omnix-docs)** | **Docs and website** | Guides, architecture notes, profile authoring |
+| ⚙️ **[`.github`](https://github.com/Omnix-Linux/.github)** | Org profile, community health files, issue templates | You are here 👋 |
 
 ```mermaid
 flowchart LR
@@ -256,7 +256,7 @@ flowchart LR
 
 ```nix
 {
-  inputs.omnix.url = "github:omnix-os/omnix";
+  inputs.omnix.url = "github:Omnix-Linux/omnix";
 
   outputs = { nixpkgs, omnix, ... }: {
     nixosConfigurations.my-machine = nixpkgs.lib.nixosSystem {
@@ -277,7 +277,7 @@ flowchart LR
 **Or start from a template:**
 
 ```bash
-nix flake init -t github:omnix-os/omnix#omarchy
+nix flake init -t github:Omnix-Linux/omnix#omarchy
 sudo nixos-rebuild switch --flake .#my-machine
 ```
 
@@ -299,8 +299,8 @@ $ omnix doctor
 Contributions are welcome. Good places to start:
 
 - 🐛 **Found a binary that won't run?** Open an issue with the output of `omnix doctor` and `ldd <binary>`, and we'll add it to the conformance corpus.
-- 🐧 **Want your favorite distro supported?** Profiles live in [`omnix-distros`](https://github.com/omnix-os/omnix-distros). Copy an existing one to start.
-- 🧪 **Want to strengthen testing?** [`omnix-tests`](https://github.com/omnix-os/omnix-tests) always needs more real-world binaries and screenshot baselines.
+- 🐧 **Want your favorite distro supported?** Profiles live in [`omnix-distros`](https://github.com/Omnix-Linux/omnix-distros). Copy an existing one to start.
+- 🧪 **Want to strengthen testing?** [`omnix-tests`](https://github.com/Omnix-Linux/omnix-tests) always needs more real-world binaries and screenshot baselines.
 
 Every PR must pass all five test gates. Run them locally before pushing.
 
