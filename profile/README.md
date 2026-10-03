@@ -1,14 +1,16 @@
 <div align="center">
 
+<a href="https://www.omnix-linux.com">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/omnix-banner-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="assets/omnix-banner-light.svg">
   <img alt="Omnix — FHS-compliant NixOS" src="assets/omnix-banner-light.svg" width="720">
 </picture>
+</a>
 
 ### NixOS reproducibility, with an ordinary `/usr/bin`.
 
-**[www.omnix-linux.com](https://www.omnix-linux.com)**
+<a href="https://www.omnix-linux.com"><img alt="Visit www.omnix-linux.com" src="https://img.shields.io/badge/Visit-www.omnix--linux.com-8B5CF6?style=for-the-badge&labelColor=5277C3" height="46"></a>
 
 [![NixOS](https://img.shields.io/badge/NixOS-unstable-5277C3?style=for-the-badge&logo=nixos&logoColor=white)](https://nixos.org)
 [![FHS 3.0](https://img.shields.io/badge/FHS-3.0_compliant-7EBAE4?style=for-the-badge&logo=linuxfoundation&logoColor=white)](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html)
