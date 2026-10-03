@@ -12,7 +12,7 @@
 [![FHS 3.0](https://img.shields.io/badge/FHS-3.0_compliant-7EBAE4?style=for-the-badge&logo=linuxfoundation&logoColor=white)](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html)
 [![Omarchy](https://img.shields.io/badge/Runs-Omarchy-8B5CF6?style=for-the-badge&logo=archlinux&logoColor=white)](https://omarchy.org)
 
-[**Summary**](#executive-summary) · [**Background**](#background) · [**Why it happens**](#why-this-happens) · [**How Omnix fixes it**](#how-omnix-fixes-it) · [**Repo layout**](#repo-layout) · [**Testing**](#how-we-test) · [**Get started**](#get-started)
+[**Summary**](#executive-summary) · [**Background**](#background) · [**Why it happens**](#why-this-happens) · [**How Omnix fixes it**](#how-omnix-fixes-it) · [**Install**](#install-walkthrough) · [**Repo layout**](#repo-layout) · [**Testing**](#how-we-test) · [**Get started**](#get-started)
 
 </div>
 
@@ -106,28 +106,119 @@ generation rolls back the library layout with it. Nix's own builds still can't s
 
 ---
 
+## Install walkthrough
+
+Installing Omnix takes five choices and one download. The installer is a text menu: arrow keys to move, Enter to
+pick. Nothing is written to disk until you confirm at the end of step 4.
+
+### 1. Boot the installer ISO
+
+Download the ISO from [Releases](https://github.com/Omnix-Linux/Omnix/releases), write it to a USB stick, and boot
+from it. It's the stock NixOS minimal installer plus the Omnix base, so it runs on anything NixOS supports.
+
+Then run `sudo fyxos-install`. The first thing it does is get online, because everything after this step is
+downloaded. A wired connection is picked up automatically. On Wi-Fi, it opens `nmtui` so you can choose a network.
+
+### 2. Pick a disk and a filesystem
+
+```text
+  Install to which disk? (it will be ERASED)
+  ▸ /dev/nvme0n1  1.8T  Samsung SSD 990 PRO
+    /dev/sda      465G  Crucial MX500
+
+  Filesystem
+  ▸ ext4
+    btrfs
+    xfs
+```
+
+| Filesystem | Choose it if… |
+|---|---|
+| **ext4** | You want the simple, proven default |
+| **btrfs** | You want filesystem snapshots on top of NixOS's own rollbacks |
+| **xfs** | You build a lot of code: copy-on-write cloning makes copy-heavy builds such as Rust fast |
+
+Omnix uses the whole disk. Installing next to another operating system is planned for a later version.
+
+### 3. Encrypt the disk?
+
+```text
+  Encrypt the disk (LUKS)?
+    Yes   ▸ No
+```
+
+Choose **Yes** for full-disk encryption with LUKS. You'll type a passphrase at every boot, and the disk is unreadable
+without it. Recommended for laptops.
+
+### 4. Choose your system
+
+```text
+  What kind of system do you want?
+  ▸ Autarchy (stable)  — Omarchy-style keyboard-driven Hyprland, pinned to an Omarchy release
+    Autarchy (latest)  — Omarchy-style keyboard-driven Hyprland, tracking Omarchy main
+    Atrium             — KDE Plasma desktop: polished windows, mouse-first
+    Minimal            — The Omnix base alone: console, FHS layer, nothing else
+```
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+#### 🟣 Autarchy
+**Omarchy, ported to Omnix.**
+
+The keyboard-driven [Omarchy](https://omarchy.org) desktop on Hyprland: tiling windows, Omarchy's keybindings,
+themes, and tools, rebuilt as declarative NixOS modules.
+
+- **stable** follows a pinned Omarchy release
+- **latest** tracks Omarchy's main branch
+
+</td>
+<td width="50%" valign="top">
+
+#### 🪟 Atrium
+**Lots of windows, done well.**
+
+A polished, mouse-first KDE Plasma 6 desktop for people who like a taskbar and overlapping windows.
+
+- Virtual desktops, set up per screen
+- Multi-monitor support out of the box
+- Electron apps, AppImages, and vendor tools just run
+
+</td>
+</tr>
+</table>
+
+**More styles are coming.** The menu is read live from [`flavors.json`](https://github.com/Omnix-Linux/Omnix/blob/main/flavors.json),
+so new flavors appear in the installer without a new ISO. **Minimal** installs just the base, for servers or for
+building your own setup.
+
+After choosing, you set a username, password, hostname, and timezone, then confirm one last time before the disk is
+erased.
+
+### 5. Sync from the NixOS cache
+
+The installer partitions and formats the disk, writes your machine flake, and installs. Every package is
+**downloaded prebuilt from [cache.nixos.org](https://cache.nixos.org)**, the official NixOS binary cache, so nothing
+is compiled on your machine, and you get exactly the package versions the ISO was built and tested with.
+
+It also detects your hardware: an NVIDIA GPU gets the NVIDIA driver automatically.
+
+When it finishes, reboot into your new system.
+
+> [!TIP]
+> **Changed your mind later?** Your flavor is a single input in `/etc/nixos/flake.nix`. Change it and run
+> `nixos-rebuild switch` to switch from Atrium to Autarchy, or the other way round. The previous system stays in
+> the boot menu, so you can always go back.
+
+---
+
 ## Repo layout
 
 Omnix is deliberately small. The base only provides FHS compatibility. Everything opinionated lives in a
 **flavor**, and each flavor is its own repository.
 
-### From boot to a running system
-
-```text
- 1. Boot the Omnix installer      a small ISO: stock NixOS installer + the Omnix base
-          │
- 2. Bring up the network          wired DHCP, or nmtui for Wi-Fi
-          │
- 3. Choose a flavor               read live from flavors.json, so a new flavor needs no new ISO
-          │
- 4. Write your machine flake      Omnix base + the chosen flavor + your hardware and user
-          │
- 5. Sync and build                download everything from cache.nixos.org; nothing is compiled
-          │
- 6. Reboot into your system       later, switch flavors by changing one flake input and rebuilding
-```
-
-The result is a flake that **you** own, in `/etc/nixos`. It stacks four layers, and dependencies only point down:
+Every install produces a flake that **you** own, in `/etc/nixos`. It stacks four layers, and dependencies only point down:
 
 | Layer | What it is | Lives in |
 |---|---|---|
@@ -166,8 +257,7 @@ Linux layout, and prebuilt binaries. If it runs on Omnix, the FHS layer works.
 
 ## Get started
 
-**Fresh install:** download the installer ISO from [Releases](https://github.com/Omnix-Linux/Omnix/releases),
-boot it, and run the installer. It walks you through the network, disk, flavor, and user.
+**Fresh install:** follow the [install walkthrough](#install-walkthrough).
 
 **Existing NixOS (unstable) machine:** add the base to your flake.
 
