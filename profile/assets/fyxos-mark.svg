@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="fyxos logo">
+  <defs>
+    <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="22" y1="10" x2="178" y2="190">
+      <stop offset="0" stop-color="#7EBAE4"/>
+      <stop offset="0.55" stop-color="#5277C3"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <radialGradient id="bg" cx="0.5" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#1E2A4A"/>
+      <stop offset="1" stop-color="#0B1020"/>
+    </radialGradient>
+  </defs>
+  <polygon points="100,10 178,55 178,145 100,190 22,145 22,55" fill="url(#bg)" stroke="url(#g)" stroke-width="7" stroke-linejoin="round"/>
+  <polygon points="100,28 162,64 162,136 100,172 38,136 38,64" fill="none" stroke="url(#g)" stroke-width="1.5" stroke-opacity="0.35" stroke-linejoin="round"/>
+  <!-- Y-shaped filesystem tree: / branching into the hierarchy -->
+  <g stroke="url(#g)" stroke-width="9" stroke-linecap="round" fill="none">
+    <path d="M100 104 L64 66"/>
+    <path d="M100 104 L136 66"/>
+    <path d="M100 104 L100 150"/>
+  </g>
+  <g fill="url(#g)">
+    <rect x="47" y="49" width="30" height="22" rx="5"/>
+    <rect x="123" y="49" width="30" height="22" rx="5"/>
+    <rect x="85" y="142" width="30" height="22" rx="5"/>
+  </g>
+  <g fill="#0B1020">
+    <rect x="47" y="49" width="13" height="5" rx="2"/>
+    <rect x="123" y="49" width="13" height="5" rx="2"/>
+    <rect x="85" y="142" width="13" height="5" rx="2"/>
+  </g>
+  <circle cx="100" cy="104" r="13" fill="#0B1020" stroke="url(#g)" stroke-width="6"/>
+  <path d="M104 97 L96 111" stroke="#E6EDF7" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
