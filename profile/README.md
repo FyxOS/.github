@@ -34,12 +34,11 @@ that work around it have to be found and wired up by hand, and whole distributio
 every package still comes from the official NixOS binary cache, and every change can still be rolled back. On top of
 the base, you pick a **flavor**, a complete desktop such as an Omarchy port or a KDE Plasma setup.
 
-Right now there is a lot of talk about NixOS being "captured" by ideologues that will not work with the Omarchy foundation
-because of DHH, that turns out not to be an issue.
-
-It turns out the special sauce of NixOS is actually not NixOS: it's actually https://cache.nixos.org.
-
-Building off of this is simple with github packages can self host for nixos.
+**Why now.** There's been a lot of debate about whether the NixOS project would ever work with Omarchy, given the
+politics around its creator, DHH. For Omnix, it turns out not to matter. NixOS's real advantage is the public binary
+cache at [cache.nixos.org](https://cache.nixos.org). Omnix builds on that cache without changing a single package,
+so it doesn't need anyone's permission or any infrastructure of its own: the installer ISO is hosted on GitHub
+Releases, and everything else comes straight from the NixOS cache.
 
 ---
 
