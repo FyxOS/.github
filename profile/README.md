@@ -1,14 +1,14 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/fyxos-banner-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="assets/fyxos-banner-light.svg">
-  <img alt="fyxos — FHS-compliant NixOS" src="assets/fyxos-banner-light.svg" width="720">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/omnix-banner-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/omnix-banner-light.svg">
+  <img alt="Omnix — FHS-compliant NixOS" src="assets/omnix-banner-light.svg" width="720">
 </picture>
 
 ### NixOS reproducibility, with an ordinary `/usr/bin`.
 
-**fyxos** is NixOS made **FHS-compliant**, so [Omarchy](https://omarchy.org) and other distributions' userlands
+**Omnix** is NixOS made **FHS-compliant**, so [Omarchy](https://omarchy.org) and other distributions' userlands
 run on a declarative, rollback-safe base, without patchelf or wrapper scripts.
 
 <br>
@@ -18,20 +18,20 @@ run on a declarative, rollback-safe base, without patchelf or wrapper scripts.
 [![Omarchy](https://img.shields.io/badge/Runs-Omarchy-8B5CF6?style=for-the-badge&logo=archlinux&logoColor=white)](https://omarchy.org)
 [![Hyprland](https://img.shields.io/badge/Wayland-Hyprland-58E1FF?style=for-the-badge&logo=wayland&logoColor=black)](https://hyprland.org)
 
-[**Why**](#-why-fyxos) · [**Architecture**](#-architecture) · [**Repositories**](#-the-org-at-a-glance) · [**Testing**](#-how-we-test) · [**Quick start**](#-quick-start) · [**Contributing**](#-contributing)
+[**Why**](#-why-omnix) · [**Architecture**](#-architecture) · [**Repositories**](#-the-org-at-a-glance) · [**Testing**](#-how-we-test) · [**Quick start**](#-quick-start) · [**Contributing**](#-contributing)
 
 </div>
 
 ---
 
-## ✨ Why fyxos?
+## ✨ Why Omnix?
 
 NixOS is excellent at reproducibility, but software written for "normal" Linux breaks on it. Prebuilt binaries look for
 `/lib64/ld-linux-x86-64.so.2`, scripts start with `#!/bin/bash`, and installers write to `/usr/local`, `/opt`, and `/etc`.
 On stock NixOS none of those paths behave the way the software expects.
 
 Opinionated distributions like **Omarchy** depend on those paths: they ship shell scripts, dotfiles, and binaries that assume
-a standard Filesystem Hierarchy. fyxos provides that hierarchy while keeping what makes NixOS useful.
+a standard Filesystem Hierarchy. Omnix provides that hierarchy while keeping what makes NixOS useful.
 
 <table>
 <tr>
@@ -46,7 +46,7 @@ a standard Filesystem Hierarchy. fyxos provides that hierarchy while keeping wha
 </td>
 <td width="50%" valign="top">
 
-#### 📂 What fyxos adds
+#### 📂 What Omnix adds
 - A real `/bin`, `/usr/bin`, `/lib`, `/lib64`, `/usr/lib`, `/usr/share`
 - A working dynamic loader, so **unpatched ELF binaries just run**
 - `#!/bin/bash` and other FHS shebangs resolve normally
@@ -60,7 +60,7 @@ a standard Filesystem Hierarchy. fyxos provides that hierarchy while keeping wha
 
 ## 🏗 Architecture
 
-fyxos is built in layers. The Nix store is still the single source of truth. The FHS layer is a **generated,
+Omnix is built in layers. The Nix store is still the single source of truth. The FHS layer is a **generated,
 read-only projection** of the store onto standard paths, rebuilt on every `nixos-rebuild switch`.
 
 ```mermaid
@@ -72,7 +72,7 @@ flowchart TB
         BIN["📦 Unpatched binaries<br/>AppImages · vendor tarballs · games"]
     end
 
-    subgraph FHS["📂 fyxos FHS layer"]
+    subgraph FHS["📂 Omnix FHS layer"]
         direction LR
         PATHS["/bin · /usr/bin · /sbin<br/>/lib · /lib64 · /usr/lib"]
         LD["Dynamic loader shim<br/>ld-linux + ld.so.cache"]
@@ -81,7 +81,7 @@ flowchart TB
 
     subgraph NIX["❄️ NixOS core"]
         direction LR
-        MOD["fyxos NixOS modules"]
+        MOD["Omnix NixOS modules"]
         STORE[("/nix/store")]
         GEN["System generations<br/>+ rollback"]
     end
@@ -117,7 +117,7 @@ sequenceDiagram
 
     App->>K: execve("/usr/bin/app")
     K->>LD: Load interpreter from ELF PT_INTERP
-    Note over LD: fyxos shim. On stock NixOS<br/>this path does not exist.
+    Note over LD: Omnix shim. On stock NixOS<br/>this path does not exist.
     LD->>C: Resolve libc.so.6, libGL.so.1, …
     C-->>LD: /usr/lib/libGL.so.1 → /nix/store/…-mesa/lib
     LD->>S: mmap the real libraries
@@ -130,7 +130,7 @@ sequenceDiagram
 flowchart LR
     A["✍️ Edit flake.nix"] --> B["nixos-rebuild switch"]
     B --> C["Build closure<br/>in /nix/store"]
-    C --> D["fyxos activation hook"]
+    C --> D["Omnix activation hook"]
     D --> E["Regenerate FHS<br/>symlink farm"]
     D --> F["Rebuild<br/>ld.so.cache"]
     D --> G["Reconcile /etc<br/>overlays"]
@@ -148,24 +148,24 @@ flowchart LR
 
 | Repository | Role | Highlights |
 |---|---|---|
-| 🧊 **[`fyxos`](https://github.com/FyxOS/fyxos)** | **Core flake.** The entry point, NixOS modules, and system templates | `nixosModules.default`, `templates.*`, hardware presets |
-| 📂 **[`fyxos-fhs`](https://github.com/FyxOS/fyxos-fhs)** | **The FHS layer.** Symlink-farm generator, loader shim, `/etc` overlay reconciler | Activation hooks, `ld.so.cache` builder, FHS self-check |
-| 🟣 **[`fyxos-omarchy`](https://github.com/FyxOS/fyxos-omarchy)** | **Omarchy profile.** Runs upstream Omarchy on fyxos | Hyprland session, pacman/yay shims, theme sync |
-| 🐧 **[`fyxos-distros`](https://github.com/FyxOS/fyxos-distros)** | **Other distro profiles.** Arch, Debian-style, and minimal userlands | Profile schema, community-contributed profiles |
-| 💿 **[`fyxos-iso`](https://github.com/FyxOS/fyxos-iso)** | **Installer media.** Live ISO with a guided installer | Graphical and TUI installers, disko layouts |
-| 🧪 **[`fyxos-tests`](https://github.com/FyxOS/fyxos-tests)** | **Integration test suite.** VM tests, conformance, and screenshot tests | `nixosTest` matrix, FHS 3.0 checker, Hyprland visual tests |
-| 📚 **[`fyxos.dev`](https://github.com/FyxOS/fyxos.dev)** | **Docs and website** | Guides, architecture notes, profile authoring |
-| ⚙️ **[`.github`](https://github.com/FyxOS/.github)** | Org profile, community health files, issue templates | You are here 👋 |
+| 🧊 **[`omnix`](https://github.com/omnix-os/omnix)** | **Core flake.** The entry point, NixOS modules, and system templates | `nixosModules.default`, `templates.*`, hardware presets |
+| 📂 **[`omnix-fhs`](https://github.com/omnix-os/omnix-fhs)** | **The FHS layer.** Symlink-farm generator, loader shim, `/etc` overlay reconciler | Activation hooks, `ld.so.cache` builder, FHS self-check |
+| 🟣 **[`omnix-omarchy`](https://github.com/omnix-os/omnix-omarchy)** | **Omarchy profile.** Runs upstream Omarchy on Omnix | Hyprland session, pacman/yay shims, theme sync |
+| 🐧 **[`omnix-distros`](https://github.com/omnix-os/omnix-distros)** | **Other distro profiles.** Arch, Debian-style, and minimal userlands | Profile schema, community-contributed profiles |
+| 💿 **[`omnix-iso`](https://github.com/omnix-os/omnix-iso)** | **Installer media.** Live ISO with a guided installer | Graphical and TUI installers, disko layouts |
+| 🧪 **[`omnix-tests`](https://github.com/omnix-os/omnix-tests)** | **Integration test suite.** VM tests, conformance, and screenshot tests | `nixosTest` matrix, FHS 3.0 checker, Hyprland visual tests |
+| 📚 **[`omnix-docs`](https://github.com/omnix-os/omnix-docs)** | **Docs and website** | Guides, architecture notes, profile authoring |
+| ⚙️ **[`.github`](https://github.com/omnix-os/.github)** | Org profile, community health files, issue templates | You are here 👋 |
 
 ```mermaid
 flowchart LR
-    FHS["📂 fyxos-fhs"] --> CORE["🧊 fyxos"]
-    CORE --> OMA["🟣 fyxos-omarchy"]
-    CORE --> DIS["🐧 fyxos-distros"]
-    OMA --> ISO["💿 fyxos-iso"]
+    FHS["📂 omnix-fhs"] --> CORE["🧊 omnix"]
+    CORE --> OMA["🟣 omnix-omarchy"]
+    CORE --> DIS["🐧 omnix-distros"]
+    OMA --> ISO["💿 omnix-iso"]
     DIS --> ISO
-    TESTS["🧪 fyxos-tests<br/><i>gates every PR</i>"] -.-> FHS & CORE & OMA & DIS & ISO
-    DOCS["📚 fyxos.dev"] -.-> CORE
+    TESTS["🧪 omnix-tests<br/><i>gates every PR</i>"] -.-> FHS & CORE & OMA & DIS & ISO
+    DOCS["📚 omnix-docs"] -.-> CORE
 
     classDef core fill:#13254D,stroke:#5277C3,color:#E6EDF7
     classDef prof fill:#2E1065,stroke:#8B5CF6,color:#F5F3FF
@@ -252,20 +252,20 @@ flowchart LR
 
 ## 🚀 Quick start
 
-**Add fyxos to an existing NixOS flake:**
+**Add Omnix to an existing NixOS flake:**
 
 ```nix
 {
-  inputs.fyxos.url = "github:fyxos/fyxos";
+  inputs.omnix.url = "github:omnix-os/omnix";
 
-  outputs = { nixpkgs, fyxos, ... }: {
+  outputs = { nixpkgs, omnix, ... }: {
     nixosConfigurations.my-machine = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
-        fyxos.nixosModules.default
+        omnix.nixosModules.default
         {
-          fyxos.fhs.enable = true;          # real /usr/bin, /lib64, …
-          fyxos.profile    = "omarchy";     # or "arch", "minimal", …
+          omnix.fhs.enable = true;          # real /usr/bin, /lib64, …
+          omnix.profile    = "omarchy";     # or "arch", "minimal", …
         }
         ./hardware-configuration.nix
       ];
@@ -277,7 +277,7 @@ flowchart LR
 **Or start from a template:**
 
 ```bash
-nix flake init -t github:fyxos/fyxos#omarchy
+nix flake init -t github:omnix-os/omnix#omarchy
 sudo nixos-rebuild switch --flake .#my-machine
 ```
 
@@ -286,7 +286,7 @@ sudo nixos-rebuild switch --flake .#my-machine
 ```console
 $ ls /usr/bin/bash /lib64/ld-linux-x86-64.so.2
 /usr/bin/bash  /lib64/ld-linux-x86-64.so.2
-$ fyxos doctor
+$ omnix doctor
 ✔ FHS layer       generation 42, 18,311 paths projected
 ✔ Dynamic loader  ld.so.cache fresh
 ✔ Profile         omarchy (Hyprland session ready)
@@ -298,17 +298,17 @@ $ fyxos doctor
 
 Contributions are welcome. Good places to start:
 
-- 🐛 **Found a binary that won't run?** Open an issue with the output of `fyxos doctor` and `ldd <binary>`, and we'll add it to the conformance corpus.
-- 🐧 **Want your favorite distro supported?** Profiles live in [`fyxos-distros`](https://github.com/FyxOS/fyxos-distros). Copy an existing one to start.
-- 🧪 **Want to strengthen testing?** [`fyxos-tests`](https://github.com/FyxOS/fyxos-tests) always needs more real-world binaries and screenshot baselines.
+- 🐛 **Found a binary that won't run?** Open an issue with the output of `omnix doctor` and `ldd <binary>`, and we'll add it to the conformance corpus.
+- 🐧 **Want your favorite distro supported?** Profiles live in [`omnix-distros`](https://github.com/omnix-os/omnix-distros). Copy an existing one to start.
+- 🧪 **Want to strengthen testing?** [`omnix-tests`](https://github.com/omnix-os/omnix-tests) always needs more real-world binaries and screenshot baselines.
 
 Every PR must pass all five test gates. Run them locally before pushing.
 
 <div align="center">
 <br>
 
-<img src="assets/fyxos-mark.svg" width="64" alt="fyxos mark">
+<img src="assets/omnix-mark.svg" width="64" alt="Omnix mark">
 
-<sub><b>fyxos</b> · <i>NixOS reproducibility with a standard filesystem layout.</i></sub>
+<sub><b>Omnix</b> · <i>NixOS reproducibility with a standard filesystem layout.</i></sub>
 
 </div>
