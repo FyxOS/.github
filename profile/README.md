@@ -116,7 +116,7 @@ pick. Nothing is written to disk until you confirm at the end of step 4.
 Download the ISO from [Releases](https://github.com/Omnix-Linux/Omnix/releases), write it to a USB stick, and boot
 from it. It's the stock NixOS minimal installer plus the Omnix base, so it runs on anything NixOS supports.
 
-Then run `sudo fyxos-install`. The first thing it does is get online, because everything after this step is
+Then run `sudo omnix-install`. The first thing it does is get online, because everything after this step is
 downloaded. A wired connection is picked up automatically. On Wi-Fi, it opens `nmtui` so you can choose a network.
 
 ### 2. Pick a disk and a filesystem
@@ -181,8 +181,8 @@ themes, and tools, rebuilt as declarative NixOS modules.
 
 A polished, mouse-first KDE Plasma 6 desktop for people who like a taskbar and overlapping windows.
 
-- Virtual desktops, set up per screen
-- Multi-monitor support out of the box
+- Built for multiple monitors: each screen has its own virtual desktops and switches them independently
+- A slim top bar and a floating dock, set up on first login
 - Electron apps, AppImages, and vendor tools just run
 
 </td>
