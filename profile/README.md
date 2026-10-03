@@ -34,6 +34,13 @@ that work around it have to be found and wired up by hand, and whole distributio
 every package still comes from the official NixOS binary cache, and every change can still be rolled back. On top of
 the base, you pick a **flavor**, a complete desktop such as an Omarchy port or a KDE Plasma setup.
 
+Right now there is a lot of talk about NixOS being "captured" by ideologues that will not work with the Omarchy foundation
+because of DHH, that turns out not to be an issue.
+
+It turns out the special sauce of NixOS is actually not NixOS: it's actually https://cache.nixos.org.
+
+Building off of this is simple with github packages can self host for nixos.
+
 ---
 
 ## Background
