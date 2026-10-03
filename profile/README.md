@@ -12,7 +12,7 @@
 [![FHS 3.0](https://img.shields.io/badge/FHS-3.0_compliant-7EBAE4?style=for-the-badge&logo=linuxfoundation&logoColor=white)](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html)
 [![Omarchy](https://img.shields.io/badge/Runs-Omarchy-8B5CF6?style=for-the-badge&logo=archlinux&logoColor=white)](https://omarchy.org)
 
-[**Summary**](#executive-summary) · [**Background**](#background) · [**Why it happens**](#why-this-happens) · [**What breaks**](#what-commonly-breaks) · [**How Omnix fixes it**](#how-omnix-fixes-it) · [**Repositories**](#repositories) · [**Testing**](#how-we-test)
+[**Summary**](#executive-summary) · [**Background**](#background) · [**Why it happens**](#why-this-happens) · [**How Omnix fixes it**](#how-omnix-fixes-it) · [**Repo layout**](#repo-layout) · [**Testing**](#how-we-test) · [**Get started**](#get-started)
 
 </div>
 
@@ -25,13 +25,14 @@ package with a native binary, or an AppImage all expect to find their shared lib
 On NixOS those directories don't exist, so the program fails before its first line of code runs.
 
 This is not a bug. It's a deliberate trade-off at the centre of NixOS's design, and it buys the reproducibility and
-safe rollbacks that people choose NixOS for. But the cost is real: every NixOS user eventually hits it, the existing
-workarounds have to be set up app by app, and whole distributions like **[Omarchy](https://omarchy.org)** can't run
-on NixOS at all.
+safe rollbacks that people choose NixOS for. But the cost is real: every NixOS user eventually hits it, the tools
+that work around it have to be found and wired up by hand, and whole distributions like
+**[Omarchy](https://omarchy.org)** can't run on NixOS at all.
 
-**Omnix makes NixOS FHS-compliant.** It generates a standard `/lib`, `/usr/lib`, `/bin`, and dynamic-linker cache
-from your NixOS configuration, so unmodified Linux software just runs, while the Nix store stays the single source
-of truth and every change can still be rolled back.
+**Omnix makes NixOS FHS-compliant.** It's a small base distribution that adds the standard `/lib64` loader, `/usr/lib`,
+`/bin`, and library cache to NixOS, so prebuilt Linux software just runs. It never moves or patches the Nix store, so
+every package still comes from the official NixOS binary cache, and every change can still be rolled back. On top of
+the base, you pick a **flavor**, a complete desktop such as an Omarchy port or a KDE Plasma setup.
 
 ---
 
@@ -82,142 +83,109 @@ for its loader and libraries. Software built anywhere else hasn't been rewritten
 single "the" `libstdc++.so.6` for the loader to find, only a dozen hash-named copies in the store, and nothing tells
 it which one to use.
 
-### What the failure looks like
-
-On a stock NixOS install, a downloaded binary is refused at launch:
-
-```console
-$ ./some-vendor-tool
-Could not start dynamically linked executable: ./some-vendor-tool
-NixOS cannot run dynamically linked executables intended for generic
-linux environments out of the box. For more information, see:
-https://nix.dev/permalink/stub-ld
-```
-
-With the common [`nix-ld`](https://github.com/nix-community/nix-ld) workaround enabled, the loader starts, but every
-library the program needs has to have been listed by hand in your configuration. Miss one, and you get:
-
-```console
-$ ./some-vendor-tool
-./some-vendor-tool: error while loading shared libraries: libstdc++.so.6: cannot open shared object file: No such file or directory
-```
-
-Scripts fail too, for the same reason: on stock NixOS, `/bin/sh` and `/usr/bin/env` are the only programs at
-standard paths, so `#!/bin/bash` and `#!/usr/bin/python3` scripts stop with `bad interpreter: No such file or directory`.
-
-### Why the existing workarounds aren't enough
-
-| Workaround | What it does | The catch |
-|---|---|---|
-| `patchelf` / `autoPatchelfHook` | Rewrites a binary to point at store paths | Must be repeated for every binary, every update. Breaks signed binaries and tools that verify their own checksums |
-| `buildFHSEnv` / `steam-run` | Runs a program inside a namespace that fakes an FHS layout | Per-app wrappers. Programs inside can't see the real system the same way, and setuid helpers and some sandboxes break |
-| `nix-ld` | Puts a shim loader at `/lib64/ld-linux-x86-64.so.2` | You still list every library by hand. Doesn't help scripts or anything that hard-codes `/usr/lib` paths |
-| `envfs` | Fakes `/bin` and `/usr/bin` for scripts | Covers executables only, not libraries |
-| Containers / Distrobox | Runs another distro alongside NixOS | Two systems to maintain, and the software is outside your NixOS config and rollbacks |
-
-Each one fixes part of the problem for one app at a time. None of them makes NixOS look like a normal Linux system
-to software that doesn't know it's on NixOS.
-
----
-
-## What commonly breaks
-
-If it wasn't built by Nix, assume it's affected. The cases NixOS users hit most often:
-
-| Category | Examples | Typical failure |
-|---|---|---|
-| 🐍 **Python wheels** | NumPy, PyTorch, OpenCV, anything `pip install`ed with compiled parts | `ImportError: libstdc++.so.6` or `libz.so.1: cannot open shared object file` |
-| 📦 **npm and other packages that bundle binaries** | esbuild, Prisma engines, Playwright and Puppeteer browsers, sharp | Install succeeds, first run fails on the loader or a missing library |
-| 🧑‍💻 **Editor and IDE downloads** | VS Code Remote server, JetBrains plugins, Neovim's Mason language servers | The editor fetches a binary at runtime that can't start |
-| 🛠 **Toolchains that download themselves** | `rustup` toolchains, Android SDK and NDK, Arduino and PlatformIO, Bazel, vendor SDKs | Compilers and helper tools fail mid-build |
-| 💿 **Vendor apps and AppImages** | Proprietary tarballs, AppImages, closed-source CLIs | Refused at launch by the stub loader |
-| 🎮 **Games and GPU workloads** | Native Linux games, CUDA apps, anything that loads `libGL` or `libvulkan` itself | Can't find the graphics driver libraries |
-| 📜 **Shell scripts and installers** | `curl … \| sh` installers, scripts that write to `/usr/local` or `/opt` | `#!/bin/bash: bad interpreter`, or writes fail on read-only paths |
-| 🐧 **Entire distribution userlands** | **Omarchy**, whose scripts and dotfiles assume an Arch-style FHS system | Doesn't run on NixOS at all today |
-
 ---
 
 ## How Omnix fixes it
 
-Omnix adds an **FHS layer** to NixOS. On every `nixos-rebuild switch`, it generates the standard Linux layout from
-your configuration:
+The rule is **add, never relocate.** Omnix leaves `/nix/store` untouched and adds the standard paths on top of it,
+using tools nixpkgs already ships:
 
-- **`/lib64/ld-linux-x86-64.so.2`** is a real loader, so unmodified binaries start.
-- **`/lib`, `/usr/lib`, and `/etc/ld.so.cache`** are populated from the libraries in your system configuration, so
-  the loader finds them the normal way, with no hand-maintained list.
-- **`/bin`, `/usr/bin`, and `/usr/share`** are populated, so `#!/bin/bash`-style scripts and data lookups work.
-- **`/usr/local` and `/opt`** are writable, so ordinary installers have somewhere to install.
+- **`/lib64/ld-linux-x86-64.so.2`** is provided by [nix-ld](https://github.com/nix-community/nix-ld), a small shim
+  that starts the real glibc loader with Omnix's library path. Unmodified binaries start, including from systemd
+  services, cron, and `ssh host cmd`.
+- **`/usr/lib` and `/lib`** point at a declared set of common libraries: the C/C++ runtime, compression, crypto,
+  SQLite, ICU, and more. An optional **desktop preset** adds GTK, Qt, WebKitGTK, Mesa, Vulkan, X11, and audio
+  libraries for Electron apps, Playwright browsers, and AppImages.
+- **`/etc/ld.so.cache` and `/sbin/ldconfig`** are regenerated on every switch, so code that searches for libraries
+  itself, like Python's `ctypes.util.find_library`, finds them.
+- **`/bin` and `/usr/bin`** are provided by [envfs](https://github.com/Mic92/envfs), so `#!/bin/bash`,
+  `#!/usr/bin/python3`, and hard-coded tool paths resolve to whatever is on `PATH`.
 
-The layer is generated from the Nix store, never edited by hand, and versioned with the rest of the system. Roll
-back a NixOS generation and the FHS layer rolls back with it. On top of that, **distro profiles** such as Omarchy
-run their upstream code on NixOS, unmodified.
+All of it is generated from your configuration and points through `/run/current-system`, so rolling back a NixOS
+generation rolls back the library layout with it. Nix's own builds still can't see `/usr/lib`, so they stay pure.
 
 ---
 
-## Repositories
+## Repo layout
+
+Omnix is deliberately small. The base only provides FHS compatibility. Everything opinionated lives in a
+**flavor**, and each flavor is its own repository.
+
+### From boot to a running system
+
+```text
+ 1. Boot the Omnix installer      a small ISO: stock NixOS installer + the Omnix base
+          │
+ 2. Bring up the network          wired DHCP, or nmtui for Wi-Fi
+          │
+ 3. Choose a flavor               read live from flavors.json, so a new flavor needs no new ISO
+          │
+ 4. Write your machine flake      Omnix base + the chosen flavor + your hardware and user
+          │
+ 5. Sync and build                download everything from cache.nixos.org; nothing is compiled
+          │
+ 6. Reboot into your system       later, switch flavors by changing one flake input and rebuilding
+```
+
+The result is a flake that **you** own, in `/etc/nixos`. It stacks four layers, and dependencies only point down:
+
+| Layer | What it is | Lives in |
+|---|---|---|
+| **Machine** | Your user, hardware, disk, and local tweaks | Your `/etc/nixos` flake |
+| **Flavor** | A complete system: desktop, apps, settings | A flavor repo |
+| **Base** | NixOS plus the FHS layer | [`Omnix`](https://github.com/Omnix-Linux/Omnix) |
+| **nixpkgs** | `nixos-unstable`, unmodified | [cache.nixos.org](https://cache.nixos.org) |
+
+### Repositories
 
 | Repository | Role |
 |---|---|
-| 🧊 **[`omnix`](https://github.com/Omnix-Linux/omnix)** | **Core flake.** NixOS modules, system templates, and hardware presets |
-| 📂 **[`omnix-fhs`](https://github.com/Omnix-Linux/omnix-fhs)** | **The FHS layer.** Generates the library and executable directories, the loader cache, and the writable overlays |
-| 🟣 **[`omnix-omarchy`](https://github.com/Omnix-Linux/omnix-omarchy)** | **Omarchy profile.** Runs upstream Omarchy and its Hyprland desktop on Omnix |
-| 🐧 **[`omnix-distros`](https://github.com/Omnix-Linux/omnix-distros)** | **Other distro profiles.** Arch, Debian-style, and minimal userlands |
-| 💿 **[`omnix-iso`](https://github.com/Omnix-Linux/omnix-iso)** | **Installer media.** Live ISO with a guided installer |
-| 🧪 **[`omnix-tests`](https://github.com/Omnix-Linux/omnix-tests)** | **Integration tests.** VM tests, FHS conformance, and screenshot tests |
-| 📚 **[`omnix-docs`](https://github.com/Omnix-Linux/omnix-docs)** | **Docs and website** |
+| 🧊 **[`Omnix`](https://github.com/Omnix-Linux/Omnix)** | **The base and the installer.** The FHS module, the installer ISO, the flavor registry (`flavors.json`), and the design docs |
+| 🟣 **[`Autarchy`](https://github.com/Omnix-Linux/Autarchy)** | **Flavor: Omarchy, ported.** A keyboard-driven Hyprland desktop, in *stable* (a pinned Omarchy release) and *latest* (Omarchy's main branch) variants |
+| 🪟 **[`Atrium`](https://github.com/Omnix-Linux/Atrium)** | **Flavor: KDE Plasma.** A polished, mouse-first Plasma 6 desktop, fully declarative |
+| ⚙️ **[`.github`](https://github.com/Omnix-Linux/.github)** | This org profile |
+
+A **Minimal** option, the base alone, is built into the installer.
 
 ---
 
 ## How we test
 
-The FHS layer sits under every program on the system, so a regression there breaks everything at once. Every pull
-request must pass five checks, each in a disposable VM:
+- **The base** boots in a NixOS VM under `nix flake check` and runs a collection of real downloaded binaries against
+  the FHS layer.
+- **The installer** is tested end to end: `tests/install-qemu.py` installs the ISO unattended in QEMU and boots the
+  result.
+- **Each flavor** has its own VM test that boots its desktop session.
+- **Every flavor must be cache-clean:** a dry-run build of a reference machine must show nothing to compile, so
+  installing never builds software locally.
 
-| Check | What it proves | How |
-|---|---|---|
-| **1. Evaluate** | Every module and profile evaluates and is lint-clean | `nix flake check`, `nixfmt`, `statix`, `deadnix` |
-| **2. Unit** | The FHS generator is deterministic and correct | Snapshot and property tests on the generated directories and loader cache |
-| **3. FHS conformance** | Unmodified Linux software can't tell it isn't on a normal distro | Path audit against FHS 3.0, a collection of **unpatched** real-world binaries (glibc, musl, 32-bit), pip wheels, and a shebang matrix |
-| **4. Distro VM tests** | Omarchy and the other profiles work from first boot to desktop | NixOS VM tests install each profile, log in to Hyprland, and check the screen with OCR and screenshot comparison |
-| **5. Resilience** | Upgrades never leave a machine unbootable | Upgrade, roll back, and deliberately break an activation that must revert automatically |
-
-Every check also runs locally with `nix flake check` and `nix run .#vm-test -- <profile>`.
+Autarchy doubles as the hardest test of all. Omarchy is a script-driven install that assumes Arch, a standard
+Linux layout, and prebuilt binaries. If it runs on Omnix, the FHS layer works.
 
 ---
 
-## Quick start
+## Get started
+
+**Fresh install:** download the installer ISO from [Releases](https://github.com/Omnix-Linux/Omnix/releases),
+boot it, and run the installer. It walks you through the network, disk, flavor, and user.
+
+**Existing NixOS (unstable) machine:** add the base to your flake.
 
 ```nix
-{
-  inputs.omnix.url = "github:Omnix-Linux/omnix";
-
-  outputs = { nixpkgs, omnix, ... }: {
-    nixosConfigurations.my-machine = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        omnix.nixosModules.default
-        {
-          omnix.fhs.enable = true;          # real /lib, /usr/lib, /usr/bin, …
-          omnix.profile    = "omarchy";     # or "arch", "minimal", …
-        }
-        ./hardware-configuration.nix
-      ];
-    };
-  };
-}
+inputs.omnix = { url = "github:Omnix-Linux/Omnix"; inputs.nixpkgs.follows = "nixpkgs"; };
+# modules = [ omnix.nixosModules.default ... ];
 ```
-
-Then run `sudo nixos-rebuild switch --flake .#my-machine`.
 
 ---
 
 ## Contributing
 
-- 🐛 **Found software that won't run?** Open an issue with the program, the error, and `ldd <binary>` output. We'll
-  add it to the conformance tests.
-- 🐧 **Want your distribution supported?** Profiles live in [`omnix-distros`](https://github.com/Omnix-Linux/omnix-distros).
-- 🧪 **Want to strengthen testing?** [`omnix-tests`](https://github.com/Omnix-Linux/omnix-tests) always needs more
-  real-world binaries and screenshot baselines.
+- 🐛 **Found a prebuilt binary that won't run?** Open an issue on [`Omnix`](https://github.com/Omnix-Linux/Omnix/issues)
+  with the program and the error. Don't diagnose with `ldd`: it bypasses the loader shim and reports working
+  binaries as broken.
+- 🎨 **Want to build a flavor?** Read the flavor contract in the
+  [design doc](https://github.com/Omnix-Linux/Omnix/blob/main/docs/design.md), then open a pull request that adds it to
+  `flavors.json`.
 
 <div align="center">
 <br>
@@ -225,5 +193,7 @@ Then run `sudo nixos-rebuild switch --flake .#my-machine`.
 <img src="assets/omnix-mark.svg" width="64" alt="Omnix mark">
 
 <sub><b>Omnix</b> · <i>NixOS reproducibility with a standard filesystem layout.</i></sub>
+
+<sub>Omnix is independent and not affiliated with or endorsed by the NixOS Foundation.</sub>
 
 </div>
