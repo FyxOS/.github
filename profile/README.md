@@ -8,251 +8,184 @@
 
 ### NixOS reproducibility, with an ordinary `/usr/bin`.
 
-**Omnix** is NixOS made **FHS-compliant**, so [Omarchy](https://omarchy.org) and other distributions' userlands
-run on a declarative, rollback-safe base, without patchelf or wrapper scripts.
-
-<br>
-
 [![NixOS](https://img.shields.io/badge/NixOS-unstable-5277C3?style=for-the-badge&logo=nixos&logoColor=white)](https://nixos.org)
 [![FHS 3.0](https://img.shields.io/badge/FHS-3.0_compliant-7EBAE4?style=for-the-badge&logo=linuxfoundation&logoColor=white)](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html)
 [![Omarchy](https://img.shields.io/badge/Runs-Omarchy-8B5CF6?style=for-the-badge&logo=archlinux&logoColor=white)](https://omarchy.org)
-[![Hyprland](https://img.shields.io/badge/Wayland-Hyprland-58E1FF?style=for-the-badge&logo=wayland&logoColor=black)](https://hyprland.org)
 
-[**Why**](#-why-omnix) · [**Architecture**](#-architecture) · [**Repositories**](#-the-org-at-a-glance) · [**Testing**](#-how-we-test) · [**Quick start**](#-quick-start) · [**Contributing**](#-contributing)
+[**Summary**](#executive-summary) · [**Background**](#background) · [**Why it happens**](#why-this-happens) · [**What breaks**](#what-commonly-breaks) · [**How Omnix fixes it**](#how-omnix-fixes-it) · [**Repositories**](#repositories) · [**Testing**](#how-we-test)
 
 </div>
 
 ---
 
-## ✨ Why Omnix?
+## Executive summary
 
-NixOS is excellent at reproducibility, but software written for "normal" Linux breaks on it. Prebuilt binaries look for
-`/lib64/ld-linux-x86-64.so.2`, scripts start with `#!/bin/bash`, and installers write to `/usr/local`, `/opt`, and `/etc`.
-On stock NixOS none of those paths behave the way the software expects.
+**NixOS can't run most software built for "normal" Linux.** A program downloaded from a vendor, a pip wheel, an npm
+package with a native binary, or an AppImage all expect to find their shared libraries in `/lib` and `/usr/lib`.
+On NixOS those directories don't exist, so the program fails before its first line of code runs.
 
-Opinionated distributions like **Omarchy** depend on those paths: they ship shell scripts, dotfiles, and binaries that assume
-a standard Filesystem Hierarchy. Omnix provides that hierarchy while keeping what makes NixOS useful.
+This is not a bug. It's a deliberate trade-off at the centre of NixOS's design, and it buys the reproducibility and
+safe rollbacks that people choose NixOS for. But the cost is real: every NixOS user eventually hits it, the existing
+workarounds have to be set up app by app, and whole distributions like **[Omarchy](https://omarchy.org)** can't run
+on NixOS at all.
 
-<table>
-<tr>
-<td width="50%" valign="top">
-
-#### 🧊 What you keep from NixOS
-- One `flake.nix` describes the whole machine
-- Atomic upgrades with **boot-menu rollbacks**
-- Bit-for-bit reproducible system closures
-- The `nixpkgs` package set, with 100k+ packages
-
-</td>
-<td width="50%" valign="top">
-
-#### 📂 What Omnix adds
-- A real `/bin`, `/usr/bin`, `/lib`, `/lib64`, `/usr/lib`, `/usr/share`
-- A working dynamic loader, so **unpatched ELF binaries just run**
-- `#!/bin/bash` and other FHS shebangs resolve normally
-- **Distro profiles** that run Omarchy (and others) unmodified
-
-</td>
-</tr>
-</table>
+**Omnix makes NixOS FHS-compliant.** It generates a standard `/lib`, `/usr/lib`, `/bin`, and dynamic-linker cache
+from your NixOS configuration, so unmodified Linux software just runs, while the Nix store stays the single source
+of truth and every change can still be rolled back.
 
 ---
 
-## 🏗 Architecture
+## Background
 
-Omnix is built in layers. The Nix store is still the single source of truth. The FHS layer is a **generated,
-read-only projection** of the store onto standard paths, rebuilt on every `nixos-rebuild switch`.
+Almost every program on Linux is **dynamically linked**: the executable file holds only the program's own code, and
+it borrows common code (the C library, the C++ runtime, compression, graphics, TLS) from **shared libraries** that are
+installed once and used by everything.
 
-```mermaid
-flowchart TB
-    subgraph USER["👤 User space"]
-        direction LR
-        OM["🟣 Omarchy<br/>Hyprland · scripts · dotfiles"]
-        OD["🐧 Other distro profiles<br/>Arch · Debian-style userlands"]
-        BIN["📦 Unpatched binaries<br/>AppImages · vendor tarballs · games"]
-    end
+When you start such a program, two lookups happen before `main()` runs:
 
-    subgraph FHS["📂 Omnix FHS layer"]
-        direction LR
-        PATHS["/bin · /usr/bin · /sbin<br/>/lib · /lib64 · /usr/lib"]
-        LD["Dynamic loader shim<br/>ld-linux + ld.so.cache"]
-        ETC["/etc · /opt · /usr/local<br/>mutable overlays"]
-    end
+1. **Find the loader.** The executable names a *dynamic linker* to start it. On x86-64 this path is fixed in the file
+   at build time: `/lib64/ld-linux-x86-64.so.2`.
+2. **Find the libraries.** The loader reads the list of libraries the program needs (`libc.so.6`, `libstdc++.so.6`,
+   `libz.so.1`, …) and searches for each one in a standard order: paths baked into the binary, `LD_LIBRARY_PATH`,
+   the cache in `/etc/ld.so.cache`, then the default directories `/lib` and `/usr/lib`.
 
-    subgraph NIX["❄️ NixOS core"]
-        direction LR
-        MOD["Omnix NixOS modules"]
-        STORE[("/nix/store")]
-        GEN["System generations<br/>+ rollback"]
-    end
-
-    KERNEL["🐧 Linux kernel"]
-
-    USER --> FHS
-    FHS -- "symlink farm & loader cache<br/>generated at activation" --> NIX
-    MOD --> STORE
-    STORE --> GEN
-    NIX --> KERNEL
-
-    classDef user fill:#2E1065,stroke:#8B5CF6,color:#F5F3FF
-    classDef fhs fill:#0C2A4A,stroke:#7EBAE4,color:#E6EDF7
-    classDef nix fill:#13254D,stroke:#5277C3,color:#E6EDF7
-    classDef k fill:#111827,stroke:#6B7280,color:#E5E7EB
-    class OM,OD,BIN user
-    class PATHS,LD,ETC fhs
-    class MOD,STORE,GEN nix
-    class KERNEL k
-```
-
-### How a foreign binary finds its libraries
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant App as 📦 Prebuilt app
-    participant K as 🐧 Kernel
-    participant LD as /lib64/ld-linux-x86-64.so.2
-    participant C as ld.so.cache
-    participant S as /nix/store
-
-    App->>K: execve("/usr/bin/app")
-    K->>LD: Load interpreter from ELF PT_INTERP
-    Note over LD: Omnix shim. On stock NixOS<br/>this path does not exist.
-    LD->>C: Resolve libc.so.6, libGL.so.1, …
-    C-->>LD: /usr/lib/libGL.so.1 → /nix/store/…-mesa/lib
-    LD->>S: mmap the real libraries
-    S-->>App: ✅ Runs unmodified, with no patchelf
-```
-
-### Activation lifecycle
-
-```mermaid
-flowchart LR
-    A["✍️ Edit flake.nix"] --> B["nixos-rebuild switch"]
-    B --> C["Build closure<br/>in /nix/store"]
-    C --> D["Omnix activation hook"]
-    D --> E["Regenerate FHS<br/>symlink farm"]
-    D --> F["Rebuild<br/>ld.so.cache"]
-    D --> G["Reconcile /etc<br/>overlays"]
-    E & F & G --> H{"FHS self-check<br/>passes?"}
-    H -- yes --> I["🎉 New generation live"]
-    H -- no --> J["⏪ Auto-rollback to<br/>previous generation"]
-
-    style I fill:#14532D,stroke:#22C55E,color:#F0FDF4
-    style J fill:#7F1D1D,stroke:#EF4444,color:#FEF2F2
-```
+The [Filesystem Hierarchy Standard (FHS)](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html) is the
+agreement that makes this work everywhere. Debian, Fedora, Arch, and Ubuntu all put the loader and libraries in the
+same places, so one binary built on any of them runs on all of them. Software vendors rely on this. So does nearly
+every shell script, which starts with `#!/bin/bash` and expects tools in `/usr/bin`.
 
 ---
 
-## 🗺 The org at a glance
+## Why this happens
 
-| Repository | Role | Highlights |
+NixOS deliberately does **not** follow the FHS.
+
+Instead of installing libraries into shared directories, Nix puts every package in its own directory in the
+**Nix store**, named by a hash of everything used to build it:
+
+```text
+/nix/store/q4kd9…-glibc-2.40/lib/libc.so.6
+/nix/store/8vbm2…-gcc-14.2.0-lib/lib/libstdc++.so.6
+/nix/store/zr4c1…-zlib-1.3.1/lib/libz.so.1
+```
+
+This is the core of what makes NixOS good:
+
+- **Many versions coexist.** Two programs can use two different versions of the same library without conflict.
+- **Nothing is overwritten.** An upgrade adds new store paths instead of replacing files, so a rollback is just
+  switching back to the old set.
+- **Builds are pure.** A package can only see the dependencies it declared, so builds are reproducible.
+
+Software that Nix builds itself works because Nix rewrites each binary at build time to point at exact store paths
+for its loader and libraries. Software built anywhere else hasn't been rewritten. It still asks for
+`/lib64/ld-linux-x86-64.so.2` and searches `/usr/lib`, and on NixOS those paths are empty or missing. There is no
+single "the" `libstdc++.so.6` for the loader to find, only a dozen hash-named copies in the store, and nothing tells
+it which one to use.
+
+### What the failure looks like
+
+On a stock NixOS install, a downloaded binary is refused at launch:
+
+```console
+$ ./some-vendor-tool
+Could not start dynamically linked executable: ./some-vendor-tool
+NixOS cannot run dynamically linked executables intended for generic
+linux environments out of the box. For more information, see:
+https://nix.dev/permalink/stub-ld
+```
+
+With the common [`nix-ld`](https://github.com/nix-community/nix-ld) workaround enabled, the loader starts, but every
+library the program needs has to have been listed by hand in your configuration. Miss one, and you get:
+
+```console
+$ ./some-vendor-tool
+./some-vendor-tool: error while loading shared libraries: libstdc++.so.6: cannot open shared object file: No such file or directory
+```
+
+Scripts fail too, for the same reason: on stock NixOS, `/bin/sh` and `/usr/bin/env` are the only programs at
+standard paths, so `#!/bin/bash` and `#!/usr/bin/python3` scripts stop with `bad interpreter: No such file or directory`.
+
+### Why the existing workarounds aren't enough
+
+| Workaround | What it does | The catch |
 |---|---|---|
-| 🧊 **[`omnix`](https://github.com/Omnix-Linux/omnix)** | **Core flake.** The entry point, NixOS modules, and system templates | `nixosModules.default`, `templates.*`, hardware presets |
-| 📂 **[`omnix-fhs`](https://github.com/Omnix-Linux/omnix-fhs)** | **The FHS layer.** Symlink-farm generator, loader shim, `/etc` overlay reconciler | Activation hooks, `ld.so.cache` builder, FHS self-check |
-| 🟣 **[`omnix-omarchy`](https://github.com/Omnix-Linux/omnix-omarchy)** | **Omarchy profile.** Runs upstream Omarchy on Omnix | Hyprland session, pacman/yay shims, theme sync |
-| 🐧 **[`omnix-distros`](https://github.com/Omnix-Linux/omnix-distros)** | **Other distro profiles.** Arch, Debian-style, and minimal userlands | Profile schema, community-contributed profiles |
-| 💿 **[`omnix-iso`](https://github.com/Omnix-Linux/omnix-iso)** | **Installer media.** Live ISO with a guided installer | Graphical and TUI installers, disko layouts |
-| 🧪 **[`omnix-tests`](https://github.com/Omnix-Linux/omnix-tests)** | **Integration test suite.** VM tests, conformance, and screenshot tests | `nixosTest` matrix, FHS 3.0 checker, Hyprland visual tests |
-| 📚 **[`omnix-docs`](https://github.com/Omnix-Linux/omnix-docs)** | **Docs and website** | Guides, architecture notes, profile authoring |
-| ⚙️ **[`.github`](https://github.com/Omnix-Linux/.github)** | Org profile, community health files, issue templates | You are here 👋 |
+| `patchelf` / `autoPatchelfHook` | Rewrites a binary to point at store paths | Must be repeated for every binary, every update. Breaks signed binaries and tools that verify their own checksums |
+| `buildFHSEnv` / `steam-run` | Runs a program inside a namespace that fakes an FHS layout | Per-app wrappers. Programs inside can't see the real system the same way, and setuid helpers and some sandboxes break |
+| `nix-ld` | Puts a shim loader at `/lib64/ld-linux-x86-64.so.2` | You still list every library by hand. Doesn't help scripts or anything that hard-codes `/usr/lib` paths |
+| `envfs` | Fakes `/bin` and `/usr/bin` for scripts | Covers executables only, not libraries |
+| Containers / Distrobox | Runs another distro alongside NixOS | Two systems to maintain, and the software is outside your NixOS config and rollbacks |
 
-```mermaid
-flowchart LR
-    FHS["📂 omnix-fhs"] --> CORE["🧊 omnix"]
-    CORE --> OMA["🟣 omnix-omarchy"]
-    CORE --> DIS["🐧 omnix-distros"]
-    OMA --> ISO["💿 omnix-iso"]
-    DIS --> ISO
-    TESTS["🧪 omnix-tests<br/><i>gates every PR</i>"] -.-> FHS & CORE & OMA & DIS & ISO
-    DOCS["📚 omnix-docs"] -.-> CORE
-
-    classDef core fill:#13254D,stroke:#5277C3,color:#E6EDF7
-    classDef prof fill:#2E1065,stroke:#8B5CF6,color:#F5F3FF
-    classDef qa fill:#14532D,stroke:#22C55E,color:#F0FDF4
-    class FHS,CORE,ISO core
-    class OMA,DIS prof
-    class TESTS,DOCS qa
-```
+Each one fixes part of the problem for one app at a time. None of them makes NixOS look like a normal Linux system
+to software that doesn't know it's on NixOS.
 
 ---
 
-## 🧪 How we test
+## What commonly breaks
 
-The FHS layer sits under every program on the system, so a regression there breaks everything at once.
-Every change goes through **five gates** before it reaches a user, and each gate runs in a disposable VM.
+If it wasn't built by Nix, assume it's affected. The cases NixOS users hit most often:
 
-```mermaid
-flowchart LR
-    PR(["🔀 Pull request"]) --> L1
-
-    subgraph L1["① Eval"]
-        E1["nix flake check"]
-        E2["nixfmt · statix · deadnix"]
-    end
-
-    subgraph L2["② Unit"]
-        U1["Symlink-farm generator<br/>golden-file tests"]
-        U2["ld.so.cache builder<br/>property tests"]
-    end
-
-    subgraph L3["③ FHS conformance"]
-        C1["FHS 3.0 path audit"]
-        C2["Unpatched ELF corpus<br/>glibc · musl · 32-bit"]
-        C3["Shebang matrix<br/>/bin/sh · /usr/bin/env · bash"]
-    end
-
-    subgraph L4["④ Distro VM tests"]
-        V1["Omarchy install<br/>end-to-end"]
-        V2["Hyprland session<br/>OCR + screenshot diff"]
-        V3["Other distro profiles"]
-    end
-
-    subgraph L5["⑤ Resilience"]
-        R1["Upgrade A → B"]
-        R2["Rollback B → A"]
-        R3["Broken-activation<br/>auto-rollback"]
-    end
-
-    L1 --> L2 --> L3 --> L4 --> L5 --> M(["✅ Merge"])
-
-    style PR fill:#13254D,stroke:#5277C3,color:#E6EDF7
-    style M fill:#14532D,stroke:#22C55E,color:#F0FDF4
-```
-
-| Gate | What it proves | How |
+| Category | Examples | Typical failure |
 |---|---|---|
-| **① Eval** | Every module, profile, and host config evaluates and is lint-clean | `nix flake check`, `nixfmt`, `statix`, `deadnix` |
-| **② Unit** | The FHS generators are deterministic and correct | Golden-file snapshots and property tests on the symlink farm and loader cache |
-| **③ FHS conformance** | A standard Linux program can't tell it isn't on a normal distro | Path audit against **FHS 3.0**, plus a corpus of **unpatched** vendor binaries (glibc, musl, i686) and a shebang matrix |
-| **④ Distro VM tests** | Omarchy and the other profiles work from first boot to desktop | `nixosTest` VMs install each profile, log in to Hyprland, and assert on **OCR + screenshot diffs** |
-| **⑤ Resilience** | Upgrades never leave a machine unbootable | Upgrade, rollback, and deliberately broken activations that must auto-revert |
-
-> [!TIP]
-> Every gate runs locally too. You don't have to push to find out whether CI will pass:
-> ```bash
-> nix flake check                      # gates ① + ②
-> nix build .#checks.x86_64-linux.fhs  # gate ③
-> nix run   .#vm-test -- omarchy       # gate ④, opens the VM interactively
-> ```
-
-### Test matrix
-
-| | `x86_64-linux` | `aarch64-linux` |
-|---|:---:|:---:|
-| **FHS conformance** | ✅ | ✅ |
-| **Unpatched ELF corpus** | ✅ | ✅ |
-| **Omarchy profile** | ✅ | 🚧 |
-| **Other distro profiles** | ✅ | 🚧 |
-| **Installer ISO** | ✅ | 🚧 |
-
-<sub>✅ gated on every PR · 🚧 in progress</sub>
+| 🐍 **Python wheels** | NumPy, PyTorch, OpenCV, anything `pip install`ed with compiled parts | `ImportError: libstdc++.so.6` or `libz.so.1: cannot open shared object file` |
+| 📦 **npm and other packages that bundle binaries** | esbuild, Prisma engines, Playwright and Puppeteer browsers, sharp | Install succeeds, first run fails on the loader or a missing library |
+| 🧑‍💻 **Editor and IDE downloads** | VS Code Remote server, JetBrains plugins, Neovim's Mason language servers | The editor fetches a binary at runtime that can't start |
+| 🛠 **Toolchains that download themselves** | `rustup` toolchains, Android SDK and NDK, Arduino and PlatformIO, Bazel, vendor SDKs | Compilers and helper tools fail mid-build |
+| 💿 **Vendor apps and AppImages** | Proprietary tarballs, AppImages, closed-source CLIs | Refused at launch by the stub loader |
+| 🎮 **Games and GPU workloads** | Native Linux games, CUDA apps, anything that loads `libGL` or `libvulkan` itself | Can't find the graphics driver libraries |
+| 📜 **Shell scripts and installers** | `curl … \| sh` installers, scripts that write to `/usr/local` or `/opt` | `#!/bin/bash: bad interpreter`, or writes fail on read-only paths |
+| 🐧 **Entire distribution userlands** | **Omarchy**, whose scripts and dotfiles assume an Arch-style FHS system | Doesn't run on NixOS at all today |
 
 ---
 
-## 🚀 Quick start
+## How Omnix fixes it
 
-**Add Omnix to an existing NixOS flake:**
+Omnix adds an **FHS layer** to NixOS. On every `nixos-rebuild switch`, it generates the standard Linux layout from
+your configuration:
+
+- **`/lib64/ld-linux-x86-64.so.2`** is a real loader, so unmodified binaries start.
+- **`/lib`, `/usr/lib`, and `/etc/ld.so.cache`** are populated from the libraries in your system configuration, so
+  the loader finds them the normal way, with no hand-maintained list.
+- **`/bin`, `/usr/bin`, and `/usr/share`** are populated, so `#!/bin/bash`-style scripts and data lookups work.
+- **`/usr/local` and `/opt`** are writable, so ordinary installers have somewhere to install.
+
+The layer is generated from the Nix store, never edited by hand, and versioned with the rest of the system. Roll
+back a NixOS generation and the FHS layer rolls back with it. On top of that, **distro profiles** such as Omarchy
+run their upstream code on NixOS, unmodified.
+
+---
+
+## Repositories
+
+| Repository | Role |
+|---|---|
+| 🧊 **[`omnix`](https://github.com/Omnix-Linux/omnix)** | **Core flake.** NixOS modules, system templates, and hardware presets |
+| 📂 **[`omnix-fhs`](https://github.com/Omnix-Linux/omnix-fhs)** | **The FHS layer.** Generates the library and executable directories, the loader cache, and the writable overlays |
+| 🟣 **[`omnix-omarchy`](https://github.com/Omnix-Linux/omnix-omarchy)** | **Omarchy profile.** Runs upstream Omarchy and its Hyprland desktop on Omnix |
+| 🐧 **[`omnix-distros`](https://github.com/Omnix-Linux/omnix-distros)** | **Other distro profiles.** Arch, Debian-style, and minimal userlands |
+| 💿 **[`omnix-iso`](https://github.com/Omnix-Linux/omnix-iso)** | **Installer media.** Live ISO with a guided installer |
+| 🧪 **[`omnix-tests`](https://github.com/Omnix-Linux/omnix-tests)** | **Integration tests.** VM tests, FHS conformance, and screenshot tests |
+| 📚 **[`omnix-docs`](https://github.com/Omnix-Linux/omnix-docs)** | **Docs and website** |
+
+---
+
+## How we test
+
+The FHS layer sits under every program on the system, so a regression there breaks everything at once. Every pull
+request must pass five checks, each in a disposable VM:
+
+| Check | What it proves | How |
+|---|---|---|
+| **1. Evaluate** | Every module and profile evaluates and is lint-clean | `nix flake check`, `nixfmt`, `statix`, `deadnix` |
+| **2. Unit** | The FHS generator is deterministic and correct | Snapshot and property tests on the generated directories and loader cache |
+| **3. FHS conformance** | Unmodified Linux software can't tell it isn't on a normal distro | Path audit against FHS 3.0, a collection of **unpatched** real-world binaries (glibc, musl, 32-bit), pip wheels, and a shebang matrix |
+| **4. Distro VM tests** | Omarchy and the other profiles work from first boot to desktop | NixOS VM tests install each profile, log in to Hyprland, and check the screen with OCR and screenshot comparison |
+| **5. Resilience** | Upgrades never leave a machine unbootable | Upgrade, roll back, and deliberately break an activation that must revert automatically |
+
+Every check also runs locally with `nix flake check` and `nix run .#vm-test -- <profile>`.
+
+---
+
+## Quick start
 
 ```nix
 {
@@ -264,7 +197,7 @@ flowchart LR
       modules = [
         omnix.nixosModules.default
         {
-          omnix.fhs.enable = true;          # real /usr/bin, /lib64, …
+          omnix.fhs.enable = true;          # real /lib, /usr/lib, /usr/bin, …
           omnix.profile    = "omarchy";     # or "arch", "minimal", …
         }
         ./hardware-configuration.nix
@@ -274,35 +207,17 @@ flowchart LR
 }
 ```
 
-**Or start from a template:**
-
-```bash
-nix flake init -t github:Omnix-Linux/omnix#omarchy
-sudo nixos-rebuild switch --flake .#my-machine
-```
-
-**Check it worked:**
-
-```console
-$ ls /usr/bin/bash /lib64/ld-linux-x86-64.so.2
-/usr/bin/bash  /lib64/ld-linux-x86-64.so.2
-$ omnix doctor
-✔ FHS layer       generation 42, 18,311 paths projected
-✔ Dynamic loader  ld.so.cache fresh
-✔ Profile         omarchy (Hyprland session ready)
-```
+Then run `sudo nixos-rebuild switch --flake .#my-machine`.
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome. Good places to start:
-
-- 🐛 **Found a binary that won't run?** Open an issue with the output of `omnix doctor` and `ldd <binary>`, and we'll add it to the conformance corpus.
-- 🐧 **Want your favorite distro supported?** Profiles live in [`omnix-distros`](https://github.com/Omnix-Linux/omnix-distros). Copy an existing one to start.
-- 🧪 **Want to strengthen testing?** [`omnix-tests`](https://github.com/Omnix-Linux/omnix-tests) always needs more real-world binaries and screenshot baselines.
-
-Every PR must pass all five test gates. Run them locally before pushing.
+- 🐛 **Found software that won't run?** Open an issue with the program, the error, and `ldd <binary>` output. We'll
+  add it to the conformance tests.
+- 🐧 **Want your distribution supported?** Profiles live in [`omnix-distros`](https://github.com/Omnix-Linux/omnix-distros).
+- 🧪 **Want to strengthen testing?** [`omnix-tests`](https://github.com/Omnix-Linux/omnix-tests) always needs more
+  real-world binaries and screenshot baselines.
 
 <div align="center">
 <br>
